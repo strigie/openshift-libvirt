@@ -1,0 +1,10 @@
+---
+- hosts: kvm_host
+  tasks:
+    - name: Create VMs
+      include_tasks: create.yaml
+      when: state is not defined or state == 'present'
+
+    - name: Destroy VMs
+      include_tasks: destroy.yaml
+      when: state is defined and state == 'absent'

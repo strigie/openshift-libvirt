@@ -1,0 +1,5 @@
+---
+- name: Prepare Libvirt
+  import_role:
+    name: prepare_libvirt
+  become: yes
