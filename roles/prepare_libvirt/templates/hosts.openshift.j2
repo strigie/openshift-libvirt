@@ -1,0 +1,10 @@
+{{ ansible_default_ipv4.address }}  api.{{ net.subdomain }}.{{ net.domain }} {{ net.domain }} api-int.{{ net.subdomain }}.{{ net.domain }}
+{% for b in groups['bootstrap'] %}
+{{ hostvars[b].ip }}   {{ b }} {{ b }}.{{ net.subdomain }}.{{ net.domain }}
+{% endfor %}
+{% for c in groups['control'] %}
+{{ hostvars[c].ip }}     {{ c }} {{ c }}.{{ net.subdomain }}.{{ net.domain }} etcd-{{ loop.index - 1 }}.{{ net.subdomain }}.{{ net.domain }}
+{% endfor %}
+{% for w in groups['worker'] %}
+{{ hostvars[w].ip }}     {{ w }} {{ w }}.{{ net.subdomain }}.{{ net.domain }}
+{% endfor %}

@@ -1,0 +1,73 @@
+---
+- name: Get coreos images
+  get_url:
+    url: "{{ item.url }}"
+    dest: /usr/share/nginx/html/ipxe/
+    checksum: "sha256:{{ item.checksum }}"
+    selevel: s0
+    serole: object_r
+    setype: httpd_sys_content_t
+    seuser: system_u
+    mode: 0644
+  loop:
+    - { url: "{{ url.coreos_kernel_url }}", checksum: "{{ url.sha256_kernel_url }}" }
+    - { url: "{{ url.coreos_initramfs_url }}", checksum: "{{ url.sha256_initramfs_url }}" }
+    - { url: "{{ url.coreos_bios_url }}", checksum: "{{ url.sha256_bios_url }}" }
+  register: images
+  until: images is succeeded
+  retries: 3
+
+- name: Get coreos rootfs image
+  get_url:
+    url: "{{ item.url }}"
+    dest: /usr/share/nginx/html/ipxe/
+    checksum: "sha256:{{ item.checksum }}"
+    selevel: s0
+    serole: object_r
+    setype: httpd_sys_content_t
+    seuser: system_u
+    mode: 0644
+  loop:
+    - { url: "{{ url.coreos_rootfs_url }}", checksum: "{{ url.sha256_rootfs_url }}" }
+  when:
+    - openshift.use_rootfs == true
+  register: image_rootfs
+  until: image_rootfs is succeeded
+  retries: 3
+
+- name: Get coreos signature
+  get_url:
+    url:  "{{ url.coreos_rootfs_url }}.sig"
+    dest: /usr/share/nginx/html/ipxe/
+    selevel: s0
+    serole: object_r
+    setype: httpd_sys_content_t
+    seuser: system_u
+  when: openshift.dist == "okd"
+  register: downloaded_bios_sig
+  until: downloaded_bios_sig is succeeded
+  retries: 3
+
+- name: (re)start nginx daemon
+  service:
+    name: nginx
+    state: restarted
+
+- name: Make /root/bin dir
+  file:
+    path: /root/bin
+    state: directory
+
+- name: Get openshift installer
+  unarchive:
+    src: "{{ url.openshift_installer_url }}"
+    dest: /root/bin
+    remote_src: yes
+    exclude: README.md
+
+- name: Get openshift client
+  unarchive:
+    src: "{{ url.openshift_client_url }}"
+    dest: /root/bin
+    remote_src: yes
+    exclude: README.md

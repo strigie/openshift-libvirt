@@ -1,5 +1,8 @@
 ---
-- name: Prepare Libvirt
-  import_role:
-    name: prepare_libvirt
-  become: yes
+- name: Create and boot VM
+  include_role:
+    name: boot_vm
+    apply:
+      delegate_to: "{{ groups['kvm_host'] | first }}"
+  vars:
+    ansible_become: yes

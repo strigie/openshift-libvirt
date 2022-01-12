@@ -1,0 +1,6 @@
+---
+- name: Prepare host
+  include_tasks: prepare.yaml
+
+- name: Download binaries
+  include_tasks: download.yaml

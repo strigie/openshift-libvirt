@@ -1,7 +1,44 @@
 ---
 - hosts: kvm_host
   tasks:
-    - name: Create VMs
+    - name: Prepare Libvirt
+      import_role:
+        name: prepare_libvirt
+      become: yes
+      when: state is not defined or state == 'present'
+
+- hosts: bootstrap
+  gather_facts: no
+  tasks:
+    - include_vars: "{{ inventory_dir }}/group_vars/bootstrap.yaml"
+
+    - name: Create Bootstrap VMs
+      include_tasks: create.yaml
+      when: state is not defined or state == 'present'
+
+    - name: Destroy VMs
+      include_tasks: destroy.yaml
+      when: state is defined and state == 'absent'
+
+- hosts: control
+  gather_facts: no
+  tasks:
+    - include_vars: "{{ inventory_dir }}/group_vars/control.yaml"
+
+    - name: Create Control VMs
+      include_tasks: create.yaml
+      when: state is not defined or state == 'present'
+
+    - name: Destroy VMs
+      include_tasks: destroy.yaml
+      when: state is defined and state == 'absent'
+
+- hosts: worker
+  gather_facts: no
+  tasks:
+    - include_vars: "{{ inventory_dir }}/group_vars/worker.yaml"
+
+    - name: Create Worker VMs
       include_tasks: create.yaml
       when: state is not defined or state == 'present'
 

@@ -1,0 +1,6 @@
+ip: "{{ libvirt_nat.cidr | ansible.netcommon.nthhost(5 + groups['worker'].index(inventory_hostname)) }}"
+spec:
+  cpu: 2
+  ram: 8192
+  disk: 128
+  disk_cache: unsafe

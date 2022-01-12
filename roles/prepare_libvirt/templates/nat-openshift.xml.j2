@@ -1,0 +1,19 @@
+<network>
+  <name>openshift</name>
+  <bridge name='openshift0' stp='yes' delay='0'/>
+  <forward dev='{{ ansible_default_ipv4.interface }}' mode='nat'>
+    <nat>
+      <port start='1024' end='65535'/>
+    </nat>
+    <interface dev='{{ ansible_default_ipv4.interface }}'/>
+  </forward>
+  <ip address='{{ libvirt_nat.router }}' netmask='{{ libvirt_nat.cidr | ansible.netcommon.ipaddr('netmask') }}'>
+    <dhcp>
+      <range start='{{ libvirt_nat.cidr | ansible.netcommon.nthhost(2) }}' end='{{ libvirt_nat.cidr | ansible.netcommon.nthhost(-2) }}'/>
+      <bootp file='http://{{ libvirt_nat.router }}:8000/ipxe/boot.ipxe'/>
+{% for h in groups['openshift'] %}
+      <host mac='{{ '52:54:00' | community.general.random_mac(seed=h) }}' ip='{{ hostvars[h].ip }}' name='{{ h }}.{{ net.subdomain }}.{{ net.domain }}'/>
+{% endfor %}
+    </dhcp>
+  </ip>
+</network>

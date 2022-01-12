@@ -1,0 +1,221 @@
+---
+- name: make working dir
+  file:
+    path: "{{ files.kvm }}"
+    state: directory
+
+- name: install libvirt, dnsmasq, nginx and related packages
+  dnf:
+    name:
+      - libvirt-client
+      - libvirt
+      - qemu-kvm
+      - virt-install
+      - dnsmasq
+      - nginx
+      - python3-lxml
+      - python3-libselinux
+      - python3-policycoreutils
+      - tar
+      - unzip
+    state: latest
+
+- name: allow nginx(http_port_t) to listen on extra tcp ports
+  seport:
+    ports: "{{ item }}"
+    proto: tcp
+    setype: http_port_t
+    state: present
+  loop:
+    - "6443"
+    - "8000"
+    - "22623"
+
+- name: set seboolean flag on and keep it persistent across reboots
+  seboolean:
+    name: "{{ item }}"
+    state: yes
+    persistent: yes
+    ignore_selinux_state: yes
+  loop:
+    - "httpd_can_network_connect"
+    - "httpd_graceful_shutdown"
+    - "httpd_can_network_relay"
+    - "nis_enabled"
+    - "daemons_dump_core"
+
+- name: (re)start firewalld daemon
+  service: 
+    name: firewalld
+    state: restarted
+
+- name: firewalld open ports for public
+  firewalld:
+    zone: public
+    port: "{{ item }}"
+    state: enabled
+    permanent: yes
+    immediate: yes
+  loop:
+    - 5900-5910/tcp
+    - 6443/tcp
+    - 22623/tcp
+    - 80/tcp
+    - 443/tcp
+    - 53/tcp
+    - 53/udp
+
+- name: firewalld open ports for libvirt
+  firewalld:
+    zone: libvirt
+    port: "{{ item }}"
+    state: enabled
+    permanent: yes
+    immediate: yes
+  loop:
+    - 8000/tcp
+    - 6443/tcp
+    - 22623/tcp
+    - 80/tcp
+    - 443/tcp
+    - 53/tcp
+    - 53/udp
+
+- name: Template dnsmasq conf
+  template:
+    src: dnsmasq.conf.j2
+    dest: /etc/dnsmasq.d/openshift.conf
+    selevel: s0
+    serole: object_r
+    setype: dnsmasq_etc_t
+    seuser: system_u
+
+- name: Template dnsmasq hosts
+  template:
+    src:  hosts.openshift.j2
+    dest: /etc/hosts.openshift
+    selevel: s0
+    serole: object_r
+    setype: net_conf_t
+    seuser: system_u
+
+- name: add a new line to /etc/resolv.conf
+  lineinfile:
+    path: /etc/resolv.conf
+    firstmatch: yes
+    insertbefore: '^nameserver'
+    line: "nameserver {{ ansible_default_ipv4.address }}"
+
+- name: (re)start dnsmasq daemon
+  service:
+    name: dnsmasq
+    state: restarted
+
+- name: (re)start libvirt daemon
+  service:
+    name: libvirtd
+    state: restarted
+
+- name: check if openshift nat already exists
+  virt_net:
+    command: list_nets
+  register: all_nets
+
+- name: destroy old openshift nat
+  virt_net:
+    command: destroy
+    name: openshift
+  when: "'openshift' in all_nets.list_nets"
+
+- name: undefine old openshift nat
+  virt_net:
+    command: undefine
+    name: openshift
+  when: "'openshift' in all_nets.list_nets"
+
+- name: define openshift nat
+  virt_net:
+    command: define
+    name: openshift
+    xml: "{{ lookup('template', 'nat-openshift.xml.j2')}}"
+
+- name: start openshift nat
+  virt_net:
+    command: create
+    name: openshift
+    state: active
+
+- name: send nginx config to kvm host
+  template:
+    src:  nginx.conf.j2
+    dest: /etc/nginx/nginx.conf
+    selevel: s0
+    serole: object_r
+    setype: httpd_config_t
+    seuser: system_u
+
+- name: make nginx ipxe dir
+  file:
+    path: /usr/share/nginx/html/ipxe
+    state: directory
+    recurse: yes
+    selevel: s0
+    serole: object_r
+    setype: httpd_sys_content_t
+    seuser: system_u
+    mode: 0755
+
+- name: make nginx ignitions dir
+  file:
+    path: /usr/share/nginx/html/openshift/coreos/ignitions
+    state: directory
+    recurse: yes
+    selevel: s0
+    serole: object_r
+    setype: httpd_sys_content_t
+    seuser: system_u
+    mode: 0755
+
+- name: Make ipxe/boot.ipxe.ROLE
+  template:
+    src: boot-ipxe-cfg.j2
+    dest: /usr/share/nginx/html/ipxe/boot.ipxe
+    selevel: s0
+    serole: object_r
+    setype: httpd_sys_content_t
+    seuser: system_u
+    mode: 0644
+  when:
+    - openshift.use_rootfs != true
+
+- name: make ipxe/boot.ipxe.ROLE for rootfs
+  template:
+    src: boot-ipxe-cfg-rootfs.j2
+    dest: /usr/share/nginx/html/ipxe/boot.ipxe
+    selevel: s0
+    serole: object_r
+    setype: httpd_sys_content_t
+    seuser: system_u
+    mode: 0644
+  when:
+    - openshift.use_rootfs == true
+
+- name: Template install-config.yaml
+  template:
+    src: install-config.yaml.j2
+    dest: "{{ files.kvm }}/install-config.yaml"
+
+- name: Create ignition-configs
+  command: "/root/bin/openshift-install create ignition-configs --dir={{ files.kvm }}"
+
+- name: Copy ign files
+  copy:
+    src:  "{{ files.kvm }}/{{ item | regex_replace('\\d+','') | regex_replace('control','master') }}.ign"
+    dest: "/usr/share/nginx/html/openshift/coreos/ignitions/{{ item }}.ign"
+    selevel: s0
+    serole: object_r
+    setype: httpd_sys_content_t
+    seuser: system_u
+    mode: 0644
+    remote_src: true
+  loop: "{{ groups['openshift'] }}"
