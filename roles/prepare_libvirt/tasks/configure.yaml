@@ -1,0 +1,174 @@
+- name: Template dnsmasq conf
+  template:
+    src: dnsmasq.conf.j2
+    dest: /etc/dnsmasq.d/openshift.conf
+    selevel: s0
+    serole: object_r
+    setype: dnsmasq_etc_t
+    seuser: system_u
+
+- name: Template dnsmasq hosts
+  template:
+    src:  hosts.openshift.j2
+    dest: /etc/hosts.openshift
+    selevel: s0
+    serole: object_r
+    setype: net_conf_t
+    seuser: system_u
+
+- name: add a new line to /etc/resolv.conf
+  lineinfile:
+    path: /etc/resolv.conf
+    firstmatch: yes
+    insertbefore: '^nameserver'
+    line: "nameserver {{ ansible_default_ipv4.address }}"
+
+- name: (re)start dnsmasq daemon
+  service:
+    name: dnsmasq
+    state: restarted
+
+- name: (re)start libvirt daemon
+  service:
+    name: libvirtd
+    state: restarted
+
+- name: check if openshift nat already exists
+  virt_net:
+    command: list_nets
+  register: all_nets
+
+- name: destroy old openshift nat
+  virt_net:
+    command: destroy
+    name: openshift
+  when: "'openshift' in all_nets.list_nets"
+
+- name: undefine old openshift nat
+  virt_net:
+    command: undefine
+    name: openshift
+  when: "'openshift' in all_nets.list_nets"
+
+- name: define openshift nat
+  virt_net:
+    command: define
+    name: openshift
+    xml: "{{ lookup('template', 'nat-openshift.xml.j2')}}"
+
+- name: start openshift nat
+  virt_net:
+    command: create
+    name: openshift
+    state: active
+
+- name: Template nginx.conf
+  template:
+    src:  nginx.conf.j2
+    dest: /etc/nginx/nginx.conf
+    selevel: s0
+    serole: object_r
+    setype: httpd_config_t
+    seuser: system_u
+
+- name: (re)start nginx daemon
+  systemd:
+    name: nginx
+    state: restarted
+
+- name: Make ipxe/boot.ipxe.ROLE
+  template:
+    src: boot-ipxe-cfg.j2
+    dest: /usr/share/nginx/html/ipxe/boot.ipxe
+    selevel: s0
+    serole: object_r
+    setype: httpd_sys_content_t
+    seuser: system_u
+    mode: 0644
+  when:
+    - openshift.use_rootfs != true
+
+- name: Get coreos images
+  get_url:
+    url: "{{ item.url }}"
+    dest: /usr/share/nginx/html/ipxe/
+    checksum: "sha256:{{ item.checksum }}"
+    selevel: s0
+    serole: object_r
+    setype: httpd_sys_content_t
+    seuser: system_u
+    mode: 0644
+  loop:
+    - { url: "{{ url.coreos_kernel_url }}", checksum: "{{ url.sha256_kernel_url }}" }
+    - { url: "{{ url.coreos_initramfs_url }}", checksum: "{{ url.sha256_initramfs_url }}" }
+    - { url: "{{ url.coreos_bios_url }}", checksum: "{{ url.sha256_bios_url }}" }
+  register: images
+  until: images is succeeded
+  retries: 3
+
+- name: Get coreos rootfs image
+  get_url:
+    url: "{{ item.url }}"
+    dest: /usr/share/nginx/html/ipxe/
+    checksum: "sha256:{{ item.checksum }}"
+    selevel: s0
+    serole: object_r
+    setype: httpd_sys_content_t
+    seuser: system_u
+    mode: 0644
+  loop:
+    - { url: "{{ url.coreos_rootfs_url }}", checksum: "{{ url.sha256_rootfs_url }}" }
+  when:
+    - openshift.use_rootfs == true
+  register: image_rootfs
+  until: image_rootfs is succeeded
+  retries: 3
+
+- name: Get coreos signature
+  get_url:
+    url:  "{{ url.coreos_rootfs_url }}.sig"
+    dest: /usr/share/nginx/html/ipxe/
+    selevel: s0
+    serole: object_r
+    setype: httpd_sys_content_t
+    seuser: system_u
+  when: openshift.dist == "okd"
+  register: downloaded_bios_sig
+  until: downloaded_bios_sig is succeeded
+  retries: 3
+
+- name: Create iPXE boot file
+  template:
+    src: boot-ipxe-cfg.j2
+    dest: /usr/share/nginx/html/ipxe/boot.ipxe
+    selevel: s0
+    serole: object_r
+    setype: httpd_sys_content_t
+    seuser: system_u
+    mode: 0644
+
+- name: Create cluster directory
+  file:
+    state: directory
+    path: "{{ workspace }}/{{ openshift.name }}"
+
+- name: Template install-config.yaml
+  template:
+    src: install-config.yaml.j2
+    dest: "{{ workspace }}/{{ openshift.name }}/install-config.yaml"
+
+- name: Create ignition-configs
+  command: "{{ workspace }}/openshift-install create ignition-configs --dir={{ workspace }}/{{ openshift.name }}"
+
+- name: Copy ign files
+  copy:
+    src:  "{{ workspace }}/{{ openshift.name }}/{{ item | regex_replace('\\d+','') | regex_replace('control','master') }}.ign"
+    dest: "/usr/share/nginx/html/openshift/coreos/ignitions/{{ item }}.ign"
+    selevel: s0
+    serole: object_r
+    setype: httpd_sys_content_t
+    seuser: system_u
+    mode: 0644
+    remote_src: true
+  loop: "{{ groups['openshift'] }}"
+

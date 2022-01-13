@@ -1,6 +1,7 @@
 openshift:
+  name: test
   dist: ocp
-  install_version: 4.9.9
+  install_version: 4.9.13
   coreos_version:  4.9.0
   use_rootfs:      true
 key:
@@ -9,7 +10,6 @@ key:
 # OpenShift Network
 net:
   domain: lab.local
-  subdomain: test
   cluster_cidr: 10.128.0.0/14
   cluster_prefx: 23
   service: 172.30.0.0/16

@@ -1,2 +1,1 @@
-files:
-  kvm:  "/root/openshift-libvirt"
+workspace:  "/root/openshift-libvirt"

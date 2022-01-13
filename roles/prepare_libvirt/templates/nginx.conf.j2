@@ -18,9 +18,9 @@ log_format basic '$remote_addr [$time_local] '
 
     upstream apib {
             least_conn;
-            server {{ groups['bootstrap'][0] }}.{{ net.subdomain }}.{{ net.domain }}:6443;
+            server {{ groups['bootstrap'][0] }}.{{ openshift.name }}.{{ net.domain }}:6443;
 {% for c in groups['control'] %}
-            server {{ c }}.{{ net.subdomain }}.{{ net.domain }}:6443;
+            server {{ c }}.{{ openshift.name }}.{{ net.domain }}:6443;
 {% endfor %}
     }
 
@@ -35,9 +35,9 @@ log_format basic '$remote_addr [$time_local] '
 
     upstream configureb {
             least_conn;
-            server {{ groups['bootstrap'][0] }}.{{ net.subdomain }}.{{ net.domain }}:22623;
+            server {{ groups['bootstrap'][0] }}.{{ openshift.name }}.{{ net.domain }}:22623;
 {% for c in groups['control'] %}
-            server {{ c }}.{{ net.subdomain }}.{{ net.domain }}:22623;
+            server {{ c }}.{{ openshift.name }}.{{ net.domain }}:22623;
 {% endfor %}
     }
 
@@ -50,10 +50,10 @@ log_format basic '$remote_addr [$time_local] '
     upstream ingressnosslb {
             least_conn;
 {% for c in groups['control'] %}
-            server {{ c }}.{{ net.subdomain }}.{{ net.domain }}:80;
+            server {{ c }}.{{ openshift.name }}.{{ net.domain }}:80;
 {% endfor %}
 {% for w in groups['worker'] %}
-            server {{ w }}.{{ net.subdomain }}.{{ net.domain }}:80;
+            server {{ w }}.{{ openshift.name }}.{{ net.domain }}:80;
 {% endfor %}
     }
 
@@ -69,10 +69,10 @@ log_format basic '$remote_addr [$time_local] '
     upstream ingresssslb {
             least_conn;
 {% for c in groups['control'] %}
-            server {{ c }}.{{ net.subdomain }}.{{ net.domain }}:443;
+            server {{ c }}.{{ openshift.name }}.{{ net.domain }}:443;
 {% endfor %}
 {% for w in groups['worker'] %}
-            server {{ w }}.{{ net.subdomain }}.{{ net.domain }}:443;
+            server {{ w }}.{{ openshift.name }}.{{ net.domain }}:443;
 {% endfor %}
     }
 

@@ -1,10 +1,10 @@
-{{ ansible_default_ipv4.address }}  api.{{ net.subdomain }}.{{ net.domain }} {{ net.domain }} api-int.{{ net.subdomain }}.{{ net.domain }}
+{{ ansible_default_ipv4.address }}  api.{{ openshift.name }}.{{ net.domain }} {{ net.domain }} api-int.{{ openshift.name }}.{{ net.domain }}
 {% for b in groups['bootstrap'] %}
-{{ hostvars[b].ip }}   {{ b }} {{ b }}.{{ net.subdomain }}.{{ net.domain }}
+{{ hostvars[b].ansible_host }}   {{ b }} {{ b }}.{{ openshift.name }}.{{ net.domain }}
 {% endfor %}
 {% for c in groups['control'] %}
-{{ hostvars[c].ip }}     {{ c }} {{ c }}.{{ net.subdomain }}.{{ net.domain }} etcd-{{ loop.index - 1 }}.{{ net.subdomain }}.{{ net.domain }}
+{{ hostvars[c].ansible_host }}     {{ c }} {{ c }}.{{ openshift.name }}.{{ net.domain }} etcd-{{ loop.index - 1 }}.{{ openshift.name }}.{{ net.domain }}
 {% endfor %}
 {% for w in groups['worker'] %}
-{{ hostvars[w].ip }}     {{ w }} {{ w }}.{{ net.subdomain }}.{{ net.domain }}
+{{ hostvars[w].ansible_host }}     {{ w }} {{ w }}.{{ openshift.name }}.{{ net.domain }}
 {% endfor %}

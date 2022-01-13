@@ -1,0 +1,150 @@
+---
+- name: install libvirt, dnsmasq, nginx and related packages
+  dnf:
+    name:
+      - libvirt-client
+      - libvirt
+      - qemu-kvm
+      - virt-install
+      - dnsmasq
+      - nginx
+      - python3-lxml
+      - python3-libselinux
+      - python3-policycoreutils
+      - tar
+      - unzip
+    state: latest
+
+- name: allow nginx(http_port_t) to listen on extra tcp ports
+  seport:
+    ports: "{{ item }}"
+    proto: tcp
+    setype: http_port_t
+    state: present
+  loop:
+    - "6443"
+    - "8000"
+    - "22623"
+
+- name: set seboolean flag on and keep it persistent across reboots
+  seboolean:
+    name: "{{ item }}"
+    state: yes
+    persistent: yes
+    ignore_selinux_state: yes
+  loop:
+    - "httpd_can_network_connect"
+    - "httpd_graceful_shutdown"
+    - "httpd_can_network_relay"
+    - "nis_enabled"
+    - "daemons_dump_core"
+
+- name: (re)start firewalld daemon
+  service: 
+    name: firewalld
+    state: restarted
+
+- name: firewalld open ports for public
+  firewalld:
+    zone: public
+    port: "{{ item }}"
+    state: enabled
+    permanent: yes
+    immediate: yes
+  loop:
+    - 5900-5910/tcp
+    - 6443/tcp
+    - 22623/tcp
+    - 80/tcp
+    - 443/tcp
+    - 53/tcp
+    - 53/udp
+
+- name: firewalld open ports for libvirt
+  firewalld:
+    zone: libvirt
+    port: "{{ item }}"
+    state: enabled
+    permanent: yes
+    immediate: yes
+  loop:
+    - 8000/tcp
+    - 6443/tcp
+    - 22623/tcp
+    - 80/tcp
+    - 443/tcp
+    - 53/tcp
+    - 53/udp
+
+- name: Delete nginx ipxe dir
+  file:
+    path: /usr/share/nginx/html/ipxe
+    state: absent
+
+- name: Create nginx ipxe dir
+  file:
+    path: /usr/share/nginx/html/ipxe
+    state: directory
+    recurse: yes
+    selevel: s0
+    serole: object_r
+    setype: httpd_sys_content_t
+    seuser: system_u
+    mode: 0755
+
+- name: Delete nginx ignitions dir
+  file:
+    path: /usr/share/nginx/html/openshift/coreos/ignitions
+    state: absent
+
+- name: Create nginx ignitions dir
+  file:
+    path: /usr/share/nginx/html/openshift/coreos/ignitions
+    state: directory
+    recurse: yes
+    selevel: s0
+    serole: object_r
+    setype: httpd_sys_content_t
+    seuser: system_u
+    mode: 0755
+
+- name: Delete workspace directory
+  file:
+    path: "{{ workspace }}"
+    state: absent
+
+- name: Create workspace directory
+  file:
+    path: "{{ workspace }}"
+    recurse: yes
+    state: directory
+
+- name: Get openshift installer
+  get_url:
+    url: "{{ url.openshift_installer_url }}"
+    dest: "/tmp/{{ config.openshift_installer }}"
+
+- name: Get openshift clients
+  get_url:
+    url: "{{ url.openshift_client_url }}"
+    dest: "/tmp/{{ config.openshift_client }}"
+
+- name: Extract openshift installer
+  unarchive:
+    src: "/tmp/{{ config.openshift_installer }}"
+    dest: "{{ workspace }}"
+    remote_src: yes
+
+- name: Extract Openshift clients
+  unarchive:
+    src: "/tmp/{{ config.openshift_client }}"
+    dest: "/usr/local/bin/"
+    remote_src: yes
+    include:
+      - oc
+      - kubectl
+    selevel: s0
+    serole: object_r
+    setype: bin_t
+    seuser: system_u
+    mode: 0755

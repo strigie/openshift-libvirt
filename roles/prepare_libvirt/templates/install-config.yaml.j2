@@ -3,13 +3,13 @@ baseDomain: {{ net.domain }}
 compute:
 - hyperthreading: Enabled
   name: worker
-  replicas: {{ groups['worker'] | length }}
+  replicas: 0
 controlPlane:
   hyperthreading: Enabled
   name: control
   replicas: {{ groups['control'] | length }}
 metadata:
-  name: {{ net.subdomain }}
+  name: {{ openshift.name }}
 networking:
   clusterNetworks:
   - cidr: {{ net.cluster_cidr }}

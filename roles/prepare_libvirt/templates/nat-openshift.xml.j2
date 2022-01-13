@@ -12,7 +12,7 @@
       <range start='{{ libvirt_nat.cidr | ansible.netcommon.nthhost(2) }}' end='{{ libvirt_nat.cidr | ansible.netcommon.nthhost(-2) }}'/>
       <bootp file='http://{{ libvirt_nat.router }}:8000/ipxe/boot.ipxe'/>
 {% for h in groups['openshift'] %}
-      <host mac='{{ '52:54:00' | community.general.random_mac(seed=h) }}' ip='{{ hostvars[h].ip }}' name='{{ h }}.{{ net.subdomain }}.{{ net.domain }}'/>
+      <host mac='{{ hostvars[h].spec.mac }}' ip='{{ hostvars[h].ansible_host }}' name='{{ h }}.{{ openshift.name }}.{{ net.domain }}'/>
 {% endfor %}
     </dhcp>
   </ip>
