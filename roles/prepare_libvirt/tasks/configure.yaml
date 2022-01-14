@@ -76,18 +76,6 @@
     name: nginx
     state: restarted
 
-- name: Make ipxe/boot.ipxe.ROLE
-  template:
-    src: boot-ipxe-cfg.j2
-    dest: /usr/share/nginx/html/ipxe/boot.ipxe
-    selevel: s0
-    serole: object_r
-    setype: httpd_sys_content_t
-    seuser: system_u
-    mode: 0644
-  when:
-    - openshift.use_rootfs != true
-
 - name: Get coreos images
   get_url:
     url: "{{ item.url }}"
@@ -171,4 +159,3 @@
     mode: 0644
     remote_src: true
   loop: "{{ groups['openshift'] }}"
-
